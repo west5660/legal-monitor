@@ -1,0 +1,26 @@
+# Основные настройки мониторинга
+
+fetch_window_days: 14      # Окно мониторинга: опубликовано за последние N дней от сегодня
+retention_days: 60
+cleanup_batch_days: 14
+
+sources:
+  pravo: true
+  duma_rss: false   # RSS часто пустой; законопроекты — через sozd
+  duma_api: false
+  regulation: true
+  sozd: true        # sozd.duma.gov.ru + обогащение карточек
+
+relevance_threshold: 0.35
+
+llm_max_documents: 0       # 0 = без лимита на shortlist
+llm_all_shortlist: true
+llm_min_score: 0.35
+llm_text_limit: 24000
+
+# false: экспорт списка без LLM; анализ — отдельным шагом (вопрос в меню)
+export_analyze_before: false
+
+data_dir: data
+downloads_dir: data/downloads
+output_dir: output

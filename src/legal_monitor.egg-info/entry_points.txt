@@ -1,0 +1,2 @@
+[console_scripts]
+legal-monitor = legal_monitor.cli:app
