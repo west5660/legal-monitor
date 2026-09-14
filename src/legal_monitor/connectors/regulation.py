@@ -8,6 +8,7 @@ from xml.etree import ElementTree
 import httpx
 
 from legal_monitor.connectors.base import BaseConnector
+from legal_monitor.utils import request_with_retries
 from legal_monitor.models import RawDocument
 
 logger = logging.getLogger(__name__)
@@ -28,8 +29,7 @@ class RegulationConnector(BaseConnector):
             while True:
                 params = {"limit": limit, "offset": offset, "sort": "desc"}
                 try:
-                    response = client.get(API_URL, params=params)
-                    response.raise_for_status()
+                    response = request_with_retries(client, "GET", API_URL, params=params)
                     items = _parse_response(response)
                 except Exception as exc:
                     logger.warning("regulation.gov.ru: %s", exc)

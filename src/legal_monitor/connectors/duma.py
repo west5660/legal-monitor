@@ -10,6 +10,7 @@ import feedparser
 import httpx
 
 from legal_monitor.connectors.base import BaseConnector
+from legal_monitor.utils import request_with_retries
 from legal_monitor.models import RawDocument
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,7 @@ class DumaRssConnector(BaseConnector):
 
         try:
             with httpx.Client(timeout=60.0, follow_redirects=True) as client:
-                response = client.get(url, params=params)
-                response.raise_for_status()
+                response = request_with_retries(client, "GET", url, params=params)
                 content = response.content
         except Exception as exc:
             logger.warning("duma RSS: %s", exc)
@@ -95,8 +95,7 @@ class DumaApiConnector(BaseConnector):
                     "limit": 100,
                 }
                 try:
-                    response = client.get(base, params=params)
-                    response.raise_for_status()
+                    response = request_with_retries(client, "GET", base, params=params)
                     payload = response.json()
                 except Exception as exc:
                     logger.warning("duma API: %s", exc)

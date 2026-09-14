@@ -1,17 +1,63 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import re
 import shutil
+import time
 from pathlib import Path
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TESSDATA_DIR = PROJECT_ROOT / "data" / "tessdata"
 WINDOWS_TESSDATA_DIR = Path(r"C:\ProgramData\LegalMonitor\tessdata")
 _tesseract_configured = False
+
+
+def request_with_retries(
+    client: httpx.Client,
+    method: str,
+    url: str,
+    *,
+    attempts: int = 3,
+    backoff: float = 1.5,
+    **kwargs,
+) -> httpx.Response:
+    """Выполнить HTTP-запрос с повторными попытками при сетевых сбоях.
+
+    Источники (pravo/regulation/sozd/duma) раньше сдавались после первой же
+    ошибки соединения (таймаут, обрыв) — весь источник тихо отдавал 0
+    документов без единой повторной попытки. На практике это уже приводило
+    к пустому прогону при обычном кратковременном сбое сети. Здесь — до
+    `attempts` попыток с экспоненциальной паузой между ними; исключение из
+    последней попытки пробрасывается вызывающему коду как раньше.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            response = client.request(method, url, **kwargs)
+            response.raise_for_status()
+            return response
+        except Exception as exc:  # noqa: BLE001 - пробрасываем после последней попытки
+            last_exc = exc
+            if attempt < attempts:
+                delay = backoff**attempt
+                logger.warning(
+                    "%s %s: попытка %s/%s не удалась (%s), повтор через %.1fс",
+                    method,
+                    url,
+                    attempt,
+                    attempts,
+                    exc,
+                    delay,
+                )
+                time.sleep(delay)
+    assert last_exc is not None
+    raise last_exc
 
 
 def content_hash(text: str) -> str:

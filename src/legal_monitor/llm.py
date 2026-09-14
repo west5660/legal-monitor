@@ -142,13 +142,24 @@ def _pull_ollama_model(api_root: str, model: str) -> None:
 def _get_gigachat_access_token(credentials: str, scope: str) -> str:
     global _gigachat_token, _gigachat_token_expires
 
-    if not credentials:        raise ValueError("GIGACHAT_CREDENTIALS не задан в .env")
+    if not credentials:
+        raise ValueError("GIGACHAT_CREDENTIALS не задан в .env")
 
     now = time.time()
     if _gigachat_token and now < _gigachat_token_expires - 60:
         return _gigachat_token
 
-    verify_ssl = os.getenv("GIGACHAT_VERIFY_SSL", "false").lower() == "true"
+    # По умолчанию проверка TLS ВКЛЮЧЕНА. GigaChat использует цепочку
+    # сертификатов НУЦ Минцифры, которая часто отсутствует в системном
+    # хранилище — в этом случае verify=True сразу покажет понятную ошибку,
+    # и пользователь один раз установит корневой сертификат Минцифры
+    # (https://www.gosuslugi.ru/crt), а не будет молча работать без TLS.
+    verify_ssl = os.getenv("GIGACHAT_VERIFY_SSL", "true").lower() == "true"
+    if not verify_ssl:
+        logger.warning(
+            "GigaChat: проверка TLS-сертификата ОТКЛЮЧЕНА (GIGACHAT_VERIFY_SSL=false). "
+            "Используйте это только временно для диагностики."
+        )
     response = httpx.post(
         os.getenv("GIGACHAT_AUTH_URL", "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"),
         headers={

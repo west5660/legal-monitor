@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 import httpx
 
 from legal_monitor.connectors.base import BaseConnector
+from legal_monitor.utils import request_with_retries
 from legal_monitor.models import RawDocument
 
 logger = logging.getLogger(__name__)
@@ -33,8 +34,9 @@ class PravoConnector(BaseConnector):
                     "Index": page,
                 }
                 try:
-                    response = client.get(f"{API_BASE}/Documents", params=params)
-                    response.raise_for_status()
+                    response = request_with_retries(
+                        client, "GET", f"{API_BASE}/Documents", params=params
+                    )
                     payload = response.json()
                 except Exception as exc:
                     logger.warning("pravo.gov.ru: ошибка запроса стр.%s — %s", page, exc)

@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 import httpx
 
 from legal_monitor.connectors.base import BaseConnector
+from legal_monitor.utils import request_with_retries
 from legal_monitor.models import RawDocument
 
 logger = logging.getLogger(__name__)
@@ -77,8 +78,7 @@ class SozdConnector(BaseConnector):
             for page_num in range(1, MAX_SEARCH_PAGES + 1):
                 url = self._build_url(date_from, date_to, page_num)
                 try:
-                    response = client.get(url)
-                    response.raise_for_status()
+                    response = request_with_retries(client, "GET", url)
                 except Exception as exc:
                     logger.warning("СОЗД HTTP стр.%s: %s", page_num, exc)
                     break
@@ -148,8 +148,7 @@ class SozdConnector(BaseConnector):
     ) -> RawDocument | None:
         url = stub.get("url") or f"{SOZD_BASE}/bill/{number}"
         try:
-            response = client.get(url)
-            response.raise_for_status()
+            response = request_with_retries(client, "GET", url)
         except Exception as exc:
             logger.debug("СОЗД карточка %s: %s", number, exc)
             return self._stub_to_raw(stub, number=number, url=url)

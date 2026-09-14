@@ -190,7 +190,7 @@ def run_analyze(
                     len(relevant),
                 )
                 analysis = _analyze_document_llm(
-                    llm_client, doc, relevant, llm_model, text, settings.llm_text_limit
+                    llm_client, doc, relevant, llm_model, text, settings.llm_text_limit, settings
                 )
                 stats["llm_used"] += 1
             elif llm_client is None:
@@ -402,6 +402,30 @@ def _analyze_without_llm(
     return summary, key_changes, impact, risks, legal_analysis
 
 
+def _llm_request_kwargs(settings: Settings, prompt_chars: int) -> dict:
+    """Параметры контекста/длины ответа для вызова LLM.
+
+    Без явных лимитов Ollama использует свой контекст по умолчанию
+    (часто 2048-4096 токенов), из-за чего длинные документы обрезаются
+    незаметно для пользователя ещё до того, как модель их увидит.
+    Здесь контекст рассчитывается по объёму реально отправляемого
+    текста, а не берётся "на глаз".
+    """
+    kwargs: dict = {"max_tokens": 2048}
+    if settings.llm_provider == "ollama":
+        # Русский текст: примерно 2.0-2.5 символа на токен.
+        # Берём консервативную оценку с запасом на системную часть промпта.
+        estimated_input_tokens = int(prompt_chars / 2.0) + 1000
+        num_ctx = 4096
+        needed = estimated_input_tokens + 2048  # + место под ответ
+        while num_ctx < needed and num_ctx < 32768:
+            num_ctx *= 2
+        kwargs["extra_body"] = {
+            "options": {"num_ctx": num_ctx, "num_predict": 2048}
+        }
+    return kwargs
+
+
 def _analyze_document_llm(
     client,
     doc: Document,
@@ -409,6 +433,7 @@ def _analyze_document_llm(
     llm_model: str,
     text: str,
     text_limit: int,
+    settings: Settings,
 ) -> DocumentAnalysis:
     profiles_block = "\n".join(
         f"- id={m.profile_id}, название={p.name}, описание={p.description}"
@@ -451,7 +476,7 @@ def _analyze_document_llm(
   Если деталей мало — напиши: «В доступном тексте детали изменений (цифры, было→стало) не указаны»
   и перечисли только то, что явно видно (статьи, субъекты, процедуры).
 - Не копируй шаблоны и примеры — только факты из текста документа выше.
-- ЗАПРЕЩЕНО упоминать НДФЛ, «13%», «15%», «ставку налога», если этого нет в тексте документа.
+- Каждая цифра, ставка, процент, сумма или срок в твоём ответе должны быть взяты дословно из текста документа выше. Если такого числа в тексте нет — не пиши его вообще, даже если оно кажется типичным для подобных законов (не переноси цифры из общих знаний о законодательстве РФ).
 - ЗАПРЕЩЕНО использовать плейсхолдеры: «…», «(ст. …)», «с … до …», «вступают в силу с …».
 - Если стадия «На рассмотрении» / «проект» / «Текст» — не пиши «приняты изменения»;
   используй «предусмотрены изменения», «на рассмотрении проект изменений».
@@ -475,10 +500,12 @@ def _analyze_document_llm(
 }}
 """
     try:
+        request_kwargs = _llm_request_kwargs(settings, len(prompt))
         response = client.chat.completions.create(
             model=llm_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
+            **request_kwargs,
         )
         raw = response.choices[0].message.content or ""
         return _parse_document_analysis(raw, relevant, doc, text)
