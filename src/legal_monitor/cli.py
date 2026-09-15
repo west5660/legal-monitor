@@ -254,6 +254,29 @@ def web_ui():
     raise SystemExit(subprocess.call([sys.executable, str(script)]))
 
 
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def _warn_if_non_loopback(host: str) -> None:
+    """Предупредить, если API запускается не на loopback-интерфейсе.
+
+    Ни один endpoint веб-API не защищён паролем/токеном - это личный
+    инструмент, рассчитанный на запуск только на localhost (см. дефолт
+    host="127.0.0.1" ниже, а также scripts/start_web.py и CORS-настройки
+    в web/app.py, которые тоже жёстко привязаны к 127.0.0.1). Явный
+    запуск с не-loopback хостом всё ещё возможен (`--host 0.0.0.0`), но
+    тогда открывает неаутентифицированный доступ ко всем данным
+    мониторинга кому угодно в той же сети - предупреждаем об этом
+    вместо того, чтобы блокировать запуск.
+    """
+    if host not in _LOOPBACK_HOSTS:
+        console.print(
+            f"[bold red]Внимание:[/bold red] API запускается на {host} (не localhost) - "
+            "ни один endpoint не защищён паролем/токеном. Открывать за пределами "
+            "локальной машины небезопасно."
+        )
+
+
 @app.command("serve")
 def serve(
     host: str = typer.Option("127.0.0.1", help="Хост API"),
@@ -264,6 +287,7 @@ def serve(
 
     console.print(f"[green]API:[/green] http://{host}:{port}")
     console.print("[dim]Frontend:[/dim] cd web && npm run dev  (http://localhost:5173)")
+    _warn_if_non_loopback(host)
     uvicorn.run("legal_monitor.web.app:app", host=host, port=port, reload=False)
 
 
