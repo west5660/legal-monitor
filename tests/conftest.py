@@ -86,7 +86,15 @@ def _install_sqlalchemy_stub() -> None:
     sa_orm = types.ModuleType("sqlalchemy.orm")
 
     class DeclarativeBase:
-        pass
+        # Real SQLAlchemy generates a kwargs-accepting __init__ for a
+        # declarative model automatically. This sandbox-only stub mimics
+        # just that (Document(source=..., title=..., ...) needs to work
+        # for tests that construct model instances directly, without a
+        # real engine/session) - inert on the real machine, where the
+        # genuine DeclarativeBase is used instead.
+        def __init__(self, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
 
     class _Mapped:
         def __class_getitem__(cls, _item):
@@ -191,5 +199,26 @@ def _install_rich_stub() -> None:
     sys.modules["rich.console"] = rich_console
 
 
+def _install_feedparser_stub() -> None:
+    try:
+        import feedparser  # noqa: F401
+    except ImportError:
+        pass
+    else:
+        return  # the real package is installed here - use it, do not shadow it
+
+    feedparser = types.ModuleType("feedparser")
+    # Only needs to exist and be importable - duma.py's DumaRssConnector
+    # only calls feedparser.parse() inside fetch(), which none of the
+    # current tests exercise directly (they either stub httpx.Client and
+    # go through pravo/regulation/sozd, or bypass fetch()/connectors
+    # entirely). A no-op stand-in keeps `import feedparser` at module load
+    # time from blowing up module collection for every test that transitively
+    # imports legal_monitor.pipeline.ingest (which imports duma.py).
+    feedparser.parse = lambda *_args, **_kwargs: types.SimpleNamespace(entries=[])
+    sys.modules["feedparser"] = feedparser
+
+
 _install_sqlalchemy_stub()
 _install_rich_stub()
+_install_feedparser_stub()
