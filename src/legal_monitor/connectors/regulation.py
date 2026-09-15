@@ -21,6 +21,7 @@ class RegulationConnector(BaseConnector):
 
     def fetch(self, date_from: date, date_to: date) -> list[RawDocument]:
         documents: list[RawDocument] = []
+        skipped_no_date = 0
         offset = 0
         limit = 100
         headers = {"User-Agent": "LegalMonitor/0.1", "Accept": "application/json, application/xml"}
@@ -47,6 +48,15 @@ class RegulationConnector(BaseConnector):
                         stop = True
                         break
                     if pub_date and pub_date > date_to:
+                        continue
+                    if not pub_date:
+                        # Раньше документ без даты проходил фильтр по периоду
+                        # молча. Теперь явно исключаем и считаем.
+                        skipped_no_date += 1
+                        logger.debug(
+                            "regulation.gov.ru: пропущен проект без даты публикации: %s",
+                            item.get("Title") or item.get("title") or "",
+                        )
                         continue
 
                     project_id = str(
@@ -94,6 +104,11 @@ class RegulationConnector(BaseConnector):
                     break
                 offset += limit
 
+        if skipped_no_date:
+            logger.info(
+                "regulation.gov.ru: пропущено %s проектов без распознанной даты публикации",
+                skipped_no_date,
+            )
         logger.info("regulation.gov.ru: получено %s проектов", len(documents))
         return documents
 

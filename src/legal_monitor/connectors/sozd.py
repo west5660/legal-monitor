@@ -45,15 +45,23 @@ class SozdConnector(BaseConnector):
             return [self._stub_to_raw(stub) for stub in stubs.values()]
 
         documents: list[RawDocument] = []
+        skipped_no_date = 0
         headers = _http_headers()
         with httpx.Client(timeout=90.0, headers=headers, follow_redirects=True) as client:
             for idx, (number, stub) in enumerate(stubs.items(), start=1):
                 if idx > 1:
                     time.sleep(ENRICH_DELAY_SEC)
-                doc = self._enrich_bill(client, number, stub, date_from, date_to)
+                doc, no_date = self._enrich_bill(client, number, stub, date_from, date_to)
+                if no_date:
+                    skipped_no_date += 1
                 if doc:
                     documents.append(doc)
 
+        if skipped_no_date:
+            logger.info(
+                "СОЗД: пропущено %s законопроектов без распознанной даты регистрации",
+                skipped_no_date,
+            )
         logger.info("СОЗД: получено %s законопроектов (обогащено карточек: %s)", len(documents), len(stubs))
         return documents
 
@@ -145,32 +153,40 @@ class SozdConnector(BaseConnector):
         stub: dict,
         date_from: date,
         date_to: date,
-    ) -> RawDocument | None:
+    ) -> tuple[RawDocument | None, bool]:
+        """Возвращает (документ или None, пропущен_ли_из-за_отсутствия_даты)."""
         url = stub.get("url") or f"{SOZD_BASE}/bill/{number}"
         try:
             response = request_with_retries(client, "GET", url)
         except Exception as exc:
             logger.debug("СОЗД карточка %s: %s", number, exc)
-            return self._stub_to_raw(stub, number=number, url=url)
+            return self._stub_to_raw(stub, number=number, url=url), False
 
         parsed = _parse_bill_page(response.text, number)
         register_date = stub.get("register_date") or parsed.get("register_date")
-        if register_date and (register_date < date_from or register_date > date_to):
-            return None
+        if not register_date:
+            # Раньше законопроект без даты проходил фильтр по периоду молча.
+            logger.debug("СОЗД: законопроект %s без даты регистрации — пропущен", number)
+            return None, True
+        if register_date < date_from or register_date > date_to:
+            return None, False
 
         title = parsed.get("title") or stub.get("title") or f"Законопроект {number}"
         text = parsed.get("text") or title
-        return RawDocument(
-            source="sozd",
-            external_id=number,
-            title=title,
-            doc_type="Законопроект",
-            register_date=register_date,
-            stage=parsed.get("stage") or stub.get("stage") or "",
-            url=url,
-            initiator=parsed.get("initiator") or "",
-            text=text,
-            file_urls=parsed.get("file_urls") or [],
+        return (
+            RawDocument(
+                source="sozd",
+                external_id=number,
+                title=title,
+                doc_type="Законопроект",
+                register_date=register_date,
+                stage=parsed.get("stage") or stub.get("stage") or "",
+                url=url,
+                initiator=parsed.get("initiator") or "",
+                text=text,
+                file_urls=parsed.get("file_urls") or [],
+            ),
+            False,
         )
 
     def _stub_to_raw(self, stub: dict, *, number: str | None = None, url: str | None = None) -> RawDocument:

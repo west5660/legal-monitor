@@ -21,6 +21,7 @@ class PravoConnector(BaseConnector):
 
     def fetch(self, date_from: date, date_to: date) -> list[RawDocument]:
         documents: list[RawDocument] = []
+        skipped_no_date = 0
         page = 1
         max_pages = 100
         headers = {"User-Agent": "LegalMonitor/0.1"}
@@ -51,7 +52,19 @@ class PravoConnector(BaseConnector):
                     doc = _map_item(item)
                     if not doc:
                         continue
-                    if doc.register_date and (doc.register_date < date_from or doc.register_date > date_to):
+                    if not doc.register_date:
+                        # Раньше документ без даты проходил фильтр по периоду
+                        # молча (условие ниже было false и continue не срабатывал).
+                        # Теперь явно исключаем и считаем — иначе нельзя быть
+                        # уверенным, что выборка "за период X" действительно
+                        # ограничена периодом X.
+                        skipped_no_date += 1
+                        logger.debug(
+                            "pravo.gov.ru: пропущен документ без даты публикации: %s",
+                            (doc.title or "")[:80],
+                        )
+                        continue
+                    if doc.register_date < date_from or doc.register_date > date_to:
                         continue
                     documents.append(doc)
                     in_range += 1
@@ -60,6 +73,11 @@ class PravoConnector(BaseConnector):
                     break
                 page += 1
 
+        if skipped_no_date:
+            logger.info(
+                "pravo.gov.ru: пропущено %s документов без распознанной даты публикации",
+                skipped_no_date,
+            )
         logger.info("pravo.gov.ru: получено %s документов", len(documents))
         return documents
 

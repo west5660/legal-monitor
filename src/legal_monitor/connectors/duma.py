@@ -15,7 +15,7 @@ from legal_monitor.models import RawDocument
 
 logger = logging.getLogger(__name__)
 
-RSS_TEMPLATE = "http://api.duma.gov.ru/api/search.rss"
+RSS_TEMPLATE = "https://api.duma.gov.ru/api/search.rss"
 
 
 class DumaRssConnector(BaseConnector):
@@ -28,6 +28,7 @@ class DumaRssConnector(BaseConnector):
         }
         url = RSS_TEMPLATE
         documents: list[RawDocument] = []
+        skipped_no_date = 0
 
         try:
             with httpx.Client(timeout=60.0, follow_redirects=True) as client:
@@ -49,7 +50,12 @@ class DumaRssConnector(BaseConnector):
                 except Exception:
                     register_date = None
 
-            if register_date and (register_date < date_from or register_date > date_to):
+            if not register_date:
+                # Раньше документ без даты проходил фильтр по периоду молча.
+                skipped_no_date += 1
+                logger.debug("duma RSS: пропущен документ без даты регистрации: %s", title[:80])
+                continue
+            if register_date < date_from or register_date > date_to:
                 continue
 
             external_id = _extract_bill_number(title, link)
@@ -66,6 +72,11 @@ class DumaRssConnector(BaseConnector):
                 )
             )
 
+        if skipped_no_date:
+            logger.info(
+                "duma RSS: пропущено %s документов без распознанной даты регистрации",
+                skipped_no_date,
+            )
         logger.info("duma RSS: получено %s законопроектов", len(documents))
         return documents
 
@@ -83,7 +94,9 @@ class DumaApiConnector(BaseConnector):
 
         documents: list[RawDocument] = []
         page = 1
-        base = "http://api.duma.gov.ru/api/search.bills.json"
+        # https: раньше был http:// — apikey передаётся параметром в URL,
+        # по обычному http он был бы виден в открытом виде на пути пакета.
+        base = "https://api.duma.gov.ru/api/search.bills.json"
 
         with httpx.Client(timeout=60.0) as client:
             while True:
