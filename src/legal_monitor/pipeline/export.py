@@ -557,13 +557,23 @@ def _export_word_selected(
 
 
 def run_cleanup(settings: Settings) -> dict[str, int]:
+    """Удалить документы и их файлы старше окна хранения.
+
+    Обработка каждого документа изолирована: если для одного документа не
+    удалось удалить файлы (например, файл открыт/заблокирован на Windows),
+    это не прерывает весь пакетный запуск — документ просто пропускается и
+    будет обработан повторно в следующем запуске, а остальные документы пакета
+    обрабатываются как обычно. Строка БД документа удаляется только после успешного
+    удаления его файлов (или если файлов и не было), чтобы не оставлять в БД
+    записи, ссылающиеся на уже несуществующие папки.
+    """
     Session = init_db(str(settings.db_path))
     session = Session()
 
     cutoff = date.today() - timedelta(days=settings.retention_days)
     batch_start = cutoff - timedelta(days=settings.cleanup_batch_days)
 
-    stats = {"deleted_docs": 0, "deleted_files": 0}
+    stats = {"deleted_docs": 0, "deleted_files": 0, "failed": 0}
 
     try:
         old_docs = (
@@ -575,13 +585,24 @@ def run_cleanup(settings: Settings) -> dict[str, int]:
         )
 
         for doc in old_docs:
-            if doc.files_path:
-                folder = Path(doc.files_path)
-                if folder.exists() and folder.is_dir():
-                    for f in folder.iterdir():
-                        f.unlink(missing_ok=True)
-                    folder.rmdir()
-                    stats["deleted_files"] += 1
+            try:
+                if doc.files_path:
+                    folder = Path(doc.files_path)
+                    if folder.exists() and folder.is_dir():
+                        for f in folder.iterdir():
+                            f.unlink(missing_ok=True)
+                        folder.rmdir()
+                        stats["deleted_files"] += 1
+            except OSError as exc:
+                logger.warning(
+                    "Cleanup: не удалось удалить файлы документа id=%s (%s) — "
+                    "документ пропущен, попытка повторится в следующем запуске",
+                    getattr(doc, "id", None),
+                    exc,
+                )
+                stats["failed"] += 1
+                continue
+
             session.delete(doc)
             stats["deleted_docs"] += 1
 
@@ -590,10 +611,11 @@ def run_cleanup(settings: Settings) -> dict[str, int]:
         session.close()
 
     logger.info(
-        "Cleanup: удалено документов=%s (период %s — %s), папок=%s",
+        "Cleanup: удалено документов=%s (период %s — %s), папок=%s, пропущено из-за ошибок=%s",
         stats["deleted_docs"],
         batch_start,
         cutoff,
         stats["deleted_files"],
+        stats["failed"],
     )
     return stats

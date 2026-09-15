@@ -92,8 +92,42 @@ def _install_sqlalchemy_stub() -> None:
         def __class_getitem__(cls, _item):
             return cls
 
+    class _PermissiveColumn:
+        """Stands in for a mapped column's class-level descriptor.
+
+        Real SQLAlchemy columns support `.isnot()`, `==`, `>=`, etc. for
+        building filter expressions (e.g. in export.py's run_cleanup()).
+        Tests that stub out session.query() entirely never evaluate those
+        expressions - they just need the *construction* of the expression
+        not to raise.
+        """
+
+        def __getattr__(self, _name):
+            return lambda *_a, **_k: self
+
+        def __eq__(self, _other):
+            return self
+
+        def __ne__(self, _other):
+            return self
+
+        def __lt__(self, _other):
+            return self
+
+        def __le__(self, _other):
+            return self
+
+        def __gt__(self, _other):
+            return self
+
+        def __ge__(self, _other):
+            return self
+
+        def __hash__(self):
+            return id(self)
+
     def mapped_column(*_args, **_kwargs):
-        return None
+        return _PermissiveColumn()
 
     def relationship(*_args, **_kwargs):
         return None
@@ -105,6 +139,11 @@ def _install_sqlalchemy_stub() -> None:
     sa_orm.sessionmaker = _unavailable
     sa_orm.Query = type("Query", (), {})
     sa_orm.Session = type("Session", (), {})
+    # Only needs to exist as an importable name - export.py passes it to
+    # Query.options(), which the tests that touch that code path stub out
+    # session.query() before .options() is ever reached, so it never needs
+    # to do anything.
+    sa_orm.joinedload = lambda *_args, **_kwargs: None
 
     sa.orm = sa_orm
     sys.modules["sqlalchemy"] = sa
