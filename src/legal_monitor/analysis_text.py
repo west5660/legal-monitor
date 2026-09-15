@@ -61,7 +61,7 @@ def is_stub_analysis(text: str | None) -> bool:
     low = text.lower()
     if low in ("—", "-", "кратко:", "кратко:\n—", "кратко:\n\n—"):
         return True
-    return any(marker in low for marker in STUB_MARKERS)
+    return any(marker.lower() in low for marker in STUB_MARKERS)
 
 
 def contains_prompt_artifact(text: str, source_text: str = "") -> bool:
@@ -79,7 +79,7 @@ def contains_prompt_artifact(text: str, source_text: str = "") -> bool:
 
 def contains_placeholder_garbage(text: str) -> bool:
     low = (text or "").lower()
-    return any(marker in low for marker in PLACEHOLDER_MARKERS)
+    return any(marker.lower() in low for marker in PLACEHOLDER_MARKERS)
 
 
 def is_bad_llm_output(

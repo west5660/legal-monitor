@@ -29,9 +29,13 @@ dependencies = [
 [project.optional-dependencies]
 web = ["fastapi>=0.115.0", "uvicorn[standard]>=0.32.0"]
 browser = ["playwright>=1.45.0"]
+dev = ["pytest>=8.0.0"]
 
 [project.scripts]
 legal-monitor = "legal_monitor.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
