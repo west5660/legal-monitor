@@ -19,7 +19,7 @@ export default function ProfilesPage() {
   return (
     <>
       <h1 className="page-title">Зоны интереса</h1>
-      <p className="page-subtitle">Профили для shortlist и LLM-анализа</p>
+      <p className="page-subtitle">Профили для shortlist</p>
 
       {profiles.map((p, i) => (
         <GlassCard key={p.id} className="profile-card" delay={i * 0.03}>

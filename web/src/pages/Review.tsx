@@ -13,7 +13,7 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [analyzing, setAnalyzing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [jobMsg, setJobMsg] = useState<string | null>(null);
 
   const stamp = searchParams.get("stamp") || sessions[0]?.stamp || "";
@@ -68,23 +68,23 @@ export default function ReviewPage() {
     });
   }, []);
 
-  const runAnalyze = async () => {
+  const runExport = async () => {
     if (!data || selected.size === 0) return;
-    setAnalyzing(true);
+    setExporting(true);
     setJobMsg(null);
     const selections = data.rows
       .filter((r) => selected.has(r.row_id))
       .map((r) => ({ document_id: r.document_id, profile_id: r.profile_id }));
     const estMin = Math.max(Math.ceil(selections.length / 2), 1);
     try {
-      const job = await api.reviewAnalyze(data.stamp, selections);
+      const job = await api.reviewExport(data.stamp, selections);
       setJobMsg(
         `Задача ${job.id} запущена (~${estMin} мин на ${selections.length} строк). Смотрите «Журнал».`
       );
     } catch (e) {
       setJobMsg(e instanceof Error ? e.message : "Ошибка запуска");
     } finally {
-      setAnalyzing(false);
+      setExporting(false);
     }
   };
 
@@ -96,7 +96,7 @@ export default function ReviewPage() {
     <>
       <h1 className="page-title">Аналитический отбор</h1>
       <p className="page-subtitle">
-        Фильтры в заголовках столбцов · отметьте строки · LLM только по выбранным → Word в{" "}
+        Фильтры в заголовках столбцов · отметьте строки · экспорт выбранных → Word в{" "}
         <code>output/selected/</code>
       </p>
 
@@ -114,11 +114,11 @@ export default function ReviewPage() {
           <button
             type="button"
             className="btn btn-primary"
-            disabled={selected.size === 0 || analyzing}
-            onClick={runAnalyze}
+            disabled={selected.size === 0 || exporting}
+            onClick={runExport}
             style={{ marginLeft: "auto" }}
           >
-            {analyzing ? "Запуск…" : `LLM-анализ (${selected.size})`}
+            {exporting ? "Запуск…" : `Экспорт выбранного (${selected.size})`}
           </button>
         </div>
       </GlassCard>

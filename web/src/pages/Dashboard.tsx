@@ -55,7 +55,7 @@ export default function DashboardPage() {
     <>
       <h1 className="page-title">Обзор</h1>
       <p className="page-subtitle">
-        Период мониторинга: {data.period} · LLM: {data.llm_provider}
+        Период мониторинга: {data.period}
         {data.job_running && " · задача выполняется…"}
       </p>
 

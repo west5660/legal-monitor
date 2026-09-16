@@ -27,7 +27,7 @@ export default function PipelinePage() {
     <>
       <h1 className="page-title">Конвейер</h1>
       <p className="page-subtitle">
-        Скачивание → классификация → экспорт списка → отбор строк → LLM по выбранным. Одна задача за раз.
+        Скачивание → классификация → экспорт списка → отбор строк. Одна задача за раз.
       </p>
 
       {error && (
@@ -39,17 +39,9 @@ export default function PipelinePage() {
           type="button"
           className="btn btn-primary"
           disabled={running}
-          onClick={() => start("full", false)}
+          onClick={() => start("full")}
         >
           Полный цикл
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={running}
-          onClick={() => start("full", true)}
-        >
-          Полный цикл + LLM
         </button>
         <button type="button" className="btn btn-ghost" disabled={running} onClick={() => start("ingest")}>
           Скачать
@@ -57,14 +49,8 @@ export default function PipelinePage() {
         <button type="button" className="btn btn-ghost" disabled={running} onClick={() => start("classify")}>
           Классифицировать
         </button>
-        <button type="button" className="btn btn-ghost" disabled={running} onClick={() => start("analyze")}>
-          LLM-анализ
-        </button>
-        <button type="button" className="btn btn-ghost" disabled={running} onClick={() => start("export_flow", false)}>
+        <button type="button" className="btn btn-ghost" disabled={running} onClick={() => start("export_flow")}>
           Экспорт (список)
-        </button>
-        <button type="button" className="btn btn-ghost" disabled={running} onClick={() => start("export_flow", true)}>
-          Экспорт + анализ
         </button>
         <button type="button" className="btn btn-ghost" disabled={running} onClick={() => start("cleanup")}>
           Очистка

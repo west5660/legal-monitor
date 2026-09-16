@@ -57,7 +57,6 @@ export interface Dashboard {
   enabled_profiles: string[];
   exports_count: number;
   job_running: boolean;
-  llm_provider: string;
 }
 
 export interface FileItem {
@@ -167,8 +166,8 @@ export const api = {
   ingestHistory: () => request<{ items: Record<string, unknown>[] }>("/ingest/history"),
   reviewSessions: () => request<{ items: ReviewSession[] }>("/review/sessions"),
   reviewRows: (stamp: string) => request<ReviewData>(`/review/${encodeURIComponent(stamp)}/rows`),
-  reviewAnalyze: (stamp: string, selections: { document_id: number; profile_id: string }[]) =>
-    request<Job>("/review/analyze", {
+  reviewExport: (stamp: string, selections: { document_id: number; profile_id: string }[]) =>
+    request<Job>("/review/export", {
       method: "POST",
       body: JSON.stringify({ stamp, selections }),
     }),
