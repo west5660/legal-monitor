@@ -35,7 +35,7 @@ def rows_to_review_payload(
                 "profile_name": match.profile_name,
                 "relevance_score": match.relevance_score,
                 "analysis_preview": get_export_changes_text(doc, memo, bool(memo)),
-                "brief_summary": _brief_summary(doc, memo),
+                "brief_summary": brief_summary(doc, memo),
             }
         )
     return {
@@ -58,7 +58,7 @@ def save_review_bundle(
     return json_path, None
 
 
-def _brief_summary(doc: Document, memo: Memo | None) -> str:
+def brief_summary(doc: Document, memo: Memo | None) -> str:
     if memo and memo.summary and memo.summary.strip() not in ("—", "-"):
         text = memo.summary.strip()
     elif doc.text and doc.text.strip():

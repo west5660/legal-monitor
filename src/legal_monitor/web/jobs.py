@@ -10,7 +10,7 @@ from typing import Any, Callable
 
 from legal_monitor.config import Settings, load_settings
 from legal_monitor.pipeline.classify import run_classify
-from legal_monitor.pipeline.export import run_cleanup, run_export, run_export_flow, run_export_selected
+from legal_monitor.pipeline.export import run_cleanup, run_export_flow, run_export_selected
 from legal_monitor.pipeline.ingest import run_ingest
 from legal_monitor.progress import create_progress
 
@@ -165,8 +165,6 @@ class JobManager:
                 self._running = False
 
     def _execute(self, job_type: str, settings: Settings, kwargs: dict[str, Any]) -> dict[str, Any]:
-        with_analysis = bool(kwargs.get("with_analysis", False))
-
         if job_type == "ingest":
             with create_progress() as progress:
                 stats = run_ingest(settings, progress=progress)
@@ -176,14 +174,6 @@ class JobManager:
             with create_progress() as progress:
                 stats = run_classify(settings, progress=progress)
             return stats
-
-        if job_type == "export":
-            paths = run_export(settings, with_analysis=with_analysis)
-            return {
-                "excel": str(paths.excel),
-                "word": str(paths.word),
-                "rows": paths.rows,
-            }
 
         if job_type == "export_flow":
             with create_progress() as progress:

@@ -23,7 +23,7 @@ from legal_monitor.monitoring import (
 )
 from legal_monitor.pipeline.ingest import get_last_ingest_runs
 from legal_monitor.pipeline.migrate_output import run_migrate_output
-from legal_monitor.pipeline.review import list_review_sessions, load_review_rows
+from legal_monitor.pipeline.review import brief_summary, list_review_sessions, load_review_rows
 from legal_monitor.web.db import DB_BUSY_MESSAGE, db_session
 from legal_monitor.web.files import (
     guess_media_type,
@@ -79,7 +79,6 @@ class ProfileCreate(BaseModel):
 
 
 class JobStartRequest(BaseModel):
-    with_analysis: bool = False
     stamp: Optional[str] = None
     selections: Optional[List[dict]] = None
 
@@ -208,7 +207,7 @@ def document_detail(doc_id: int) -> dict[str, Any]:
                     "profile_id": match.profile_id,
                     "profile_name": match.profile_name,
                     "relevance_score": match.relevance_score,
-                    "analysis": get_export_changes_text(doc, memo, True) if memo else "—",
+                    "analysis": get_export_changes_text(doc, memo, True) if memo else brief_summary(doc, None),
                     "summary": memo.summary if memo else None,
                     "risks": memo.risks if memo else None,
                     "impact": memo.impact if memo else None,
@@ -244,7 +243,7 @@ def _document_row(doc: Document, match: DocumentProfile, memo: Memo | None) -> d
         "profile_name": match.profile_name,
         "relevance_score": match.relevance_score,
         "has_memo": memo is not None,
-        "analysis_preview": get_export_changes_text(doc, memo, True) if memo else "—",
+        "analysis_preview": get_export_changes_text(doc, memo, True) if memo else brief_summary(doc, None),
         "url": doc.url,
     }
 
@@ -415,7 +414,6 @@ def job_start(job_type: str, body: Optional[JobStartRequest] = None) -> dict[str
     allowed = {
         "ingest",
         "classify",
-        "export",
         "export_flow",
         "full",
         "cleanup",
@@ -425,8 +423,6 @@ def job_start(job_type: str, body: Optional[JobStartRequest] = None) -> dict[str
         raise HTTPException(400, f"Неизвестный тип: {job_type}")
     kwargs: dict[str, Any] = {}
     if body:
-        if body.with_analysis:
-            kwargs["with_analysis"] = True
         if body.stamp:
             kwargs["stamp"] = body.stamp
         if body.selections:
