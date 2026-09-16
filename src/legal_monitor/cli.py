@@ -10,9 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from legal_monitor.config import load_profiles, load_settings
-from legal_monitor.llm import ensure_ollama_model
 from legal_monitor.utils import _ensure_tesseract_env, _get_tessdata_dir
-from legal_monitor.pipeline.analyze import run_analyze
 from legal_monitor.pipeline.classify import run_classify
 from legal_monitor.pipeline.export import run_cleanup, run_export_flow
 from legal_monitor.pipeline.migrate_output import run_migrate_output
@@ -59,10 +57,6 @@ def _print_export_flow(result) -> None:
     le = result.list_export
     console.print(f"[green]Список Excel:[/green] {le.excel}")
     console.print(f"[green]Список Word:[/green]  {le.word}")
-    if result.analysis_export:
-        ae = result.analysis_export
-        console.print(f"[green]Анализ Excel:[/green] {ae.excel}")
-        console.print(f"[green]Анализ Word:[/green]  {ae.word}")
 
 
 @app.command()
@@ -84,38 +78,11 @@ def classify():
 
 
 @app.command()
-def analyze():
-    """LLM-анализ shortlist (опубликовано за 14 дней + профили)."""
+def export():
+    """Экспорт shortlist (опубликовано за 14 дней + профили) в Excel и Word."""
     settings = load_settings()
     with create_progress(console) as progress:
-        stats = run_analyze(settings, progress=progress)
-    console.print(
-        f"[green]Готово:[/green] обработано={stats['processed']}, "
-        f"memo={stats['memos_created']}, LLM={stats['llm_used']}, "
-        f"пропущено={stats.get('skipped', 0)}"
-    )
-
-
-@app.command()
-def export(
-    with_analysis: bool = typer.Option(
-        False,
-        "--analyze/--no-analyze",
-        help="Сразу выполнить LLM-анализ и сохранить вторую выгрузку _анализ",
-    ),
-):
-    """Экспорт shortlist: список + опционально выгрузка _анализ."""
-    settings = load_settings()
-    if with_analysis:
-        with create_progress(console) as progress:
-            result = run_export_flow(
-                settings,
-                progress=progress,
-                ask_analyze=False,
-                run_analysis=True,
-            )
-    else:
-        result = run_export_flow(settings, progress=None, ask_analyze=True)
+        result = run_export_flow(settings, progress=progress)
     _print_export_flow(result)
 
 
@@ -150,28 +117,13 @@ def cleanup():
 
 
 @app.command()
-def full(
-    with_analysis: bool = typer.Option(
-        False,
-        "--analyze/--no-analyze",
-        help="После выгрузки списка выполнить LLM-анализ",
-    ),
-):
-    """Полный цикл: ingest → classify → export → опц. analyze."""
+def full():
+    """Полный цикл: ingest → classify → export."""
     settings = load_settings()
     with create_progress(console) as progress:
         stats = run_ingest(settings, progress=progress)
         run_classify(settings, progress=progress)
-    if with_analysis:
-        with create_progress(console) as progress:
-            result = run_export_flow(
-                settings,
-                progress=progress,
-                ask_analyze=False,
-                run_analysis=True,
-            )
-    else:
-        result = run_export_flow(settings, progress=None, ask_analyze=True)
+        result = run_export_flow(settings, progress=progress)
     _print_ingest_stats(stats, settings)
     console.print("[bold green]Полный цикл завершён.[/bold green]")
     _print_export_flow(result)
@@ -228,23 +180,6 @@ def ocr_setup():
     console.print(f"[dim]языки:[/dim] {', '.join(sorted(langs))}")
     if "rus" not in langs:
         console.print("[yellow]Предупреждение:[/yellow] rus.traineddata не найден")
-
-
-@app.command("ollama-setup")
-def ollama_setup():
-    """Скачать модель Ollama для LLM-анализа."""
-    settings = load_settings()
-    if settings.llm_provider != "ollama":
-        console.print(
-            "[yellow]В .env установлен LLM_PROVIDER="
-            f"{settings.llm_provider}. Для Ollama задайте LLM_PROVIDER=ollama[/yellow]"
-        )
-        return
-    try:
-        model = ensure_ollama_model(settings)
-        console.print(f"[green]Ollama готова. Модель:[/green] {model}")
-    except Exception as exc:
-        console.print(f"[red]Ошибка:[/red] {exc}")
 
 
 @app.command("web")

@@ -11,7 +11,6 @@ if str(SRC) not in sys.path:
 
 from legal_monitor.config import load_profiles, load_settings, save_profiles  # noqa: E402
 from legal_monitor.monitoring import count_monitoring_shortlist, format_monitoring_period  # noqa: E402
-from legal_monitor.pipeline.analyze import run_analyze  # noqa: E402
 from legal_monitor.pipeline.classify import run_classify  # noqa: E402
 from legal_monitor.pipeline.export import ExportFlowResult, run_cleanup, run_export_flow  # noqa: E402
 from legal_monitor.pipeline.ingest import run_ingest  # noqa: E402
@@ -109,39 +108,12 @@ def show_status(settings) -> None:
 
 def _print_export_result(result: ExportFlowResult) -> None:
     le = result.list_export
-    print(f"\nВыгрузка (список): Excel: {le.excel}")
-    print(f"                    Word:  {le.word}")
-    if result.analysis_export:
-        ae = result.analysis_export
-        print(f"\nВыгрузка (анализ): Excel: {ae.excel}")
-        print(f"                   Word:  {ae.word}")
+    print(f"\nВыгрузка: Excel: {le.excel}")
+    print(f"          Word:  {le.word}")
     print("\n" + "=" * 50)
     print("  ГОТОВО")
-    if result.analysis_export:
-        print("  LLM-анализ выполнен, файлы _анализ сохранены.")
-    else:
-        print("  Выгружен только список (без LLM-анализа).")
-    print("  Ниже снова главное меню — введите цифру 0–8 (не «д»/«н»).")
+    print("  Ниже снова главное меню — введите цифру 0–7.")
     print("=" * 50)
-
-
-def _explain_menu_choice(choice: str) -> None:
-    lowered = choice.strip().lower()
-    if lowered in ("д", "да", "y", "yes", "d"):
-        print(
-            "\n«д» — это ответ на вопрос «Провести LLM-анализ?», "
-            "он появляется сразу после выгрузки списка (пункты 1 или 5).\n"
-            "Сейчас вы уже в главном меню. Если анализ уже прошёл — ничего нажимать не нужно.\n"
-            "Выберите 0 (выход) или другой пункт 1–8."
-        )
-        return
-    if lowered in ("н", "нет", "n", "no"):
-        print(
-            "\n«н» — ответ на вопрос об LLM-анализе (пункты 1 или 5), а не пункт меню.\n"
-            "В главном меню введите цифру 0–8."
-        )
-        return
-    print("Неизвестный пункт меню. Введите цифру от 0 до 8.")
 
 
 def main() -> None:
@@ -151,14 +123,13 @@ def main() -> None:
         print("\n" + "=" * 50)
         print("  ЮРИДИЧЕСКИЙ МОНИТОРИНГ")
         print("=" * 50)
-        print("1. Полный цикл (скачать → классифицировать → выгрузка → опц. анализ)")
+        print("1. Полный цикл (скачать → классифицировать → выгрузка)")
         print("2. Только скачивание (последние 2 недели, с дедупом)")
         print("3. Только классификация по зонам интереса")
-        print("4. Только LLM-анализ shortlist")
-        print("5. Экспорт (список + опционально _анализ)")
-        print("6. Очистка старых данных (пакет 2 недели)")
-        print("7. Настроить зоны интереса")
-        print("8. Статус")
+        print("4. Экспорт (список)")
+        print("5. Очистка старых данных (пакет 2 недели)")
+        print("6. Настроить зоны интереса")
+        print("7. Статус")
         print("0. Выход")
 
         choice = input("\nВыбор: ").strip()
@@ -170,8 +141,7 @@ def main() -> None:
             with create_progress() as progress:
                 run_ingest(settings, progress=progress)
                 run_classify(settings, progress=progress)
-            # export_flow без progress: иначе input «д/н» не виден в PyCharm/Windows
-            result = run_export_flow(settings, progress=None, ask_analyze=True)
+                result = run_export_flow(settings, progress=progress)
             _print_export_result(result)
         elif choice == "2":
             with create_progress() as progress:
@@ -183,24 +153,17 @@ def main() -> None:
             print(f"\nКлассификация: документов={stats['documents']}, совпадений={stats['matches']}")
         elif choice == "4":
             with create_progress() as progress:
-                stats = run_analyze(settings, progress=progress)
-            print(
-                f"\nАнализ: обработано={stats['processed']}, "
-                f"memo={stats['memos_created']}, LLM={stats['llm_used']}, "
-                f"пропущено={stats.get('skipped', 0)}"
-            )
-        elif choice == "5":
-            result = run_export_flow(settings, progress=None, ask_analyze=True)
+                result = run_export_flow(settings, progress=progress)
             _print_export_result(result)
-        elif choice == "6":
+        elif choice == "5":
             stats = run_cleanup(settings)
             print(f"\nУдалено документов: {stats['deleted_docs']}")
-        elif choice == "7":
+        elif choice == "6":
             configure_profiles()
-        elif choice == "8":
+        elif choice == "7":
             show_status(settings)
         else:
-            _explain_menu_choice(choice)
+            print("Неизвестный пункт меню. Введите цифру от 0 до 7.")
 
 
 if __name__ == "__main__":

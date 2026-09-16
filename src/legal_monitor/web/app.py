@@ -89,7 +89,7 @@ class ReviewSelectionItem(BaseModel):
     profile_id: str
 
 
-class ReviewAnalyzeRequest(BaseModel):
+class ReviewExportRequest(BaseModel):
     stamp: Optional[str] = None
     selections: List[ReviewSelectionItem]
 
@@ -143,7 +143,6 @@ def dashboard() -> dict[str, Any]:
         "enabled_profiles": enabled,
         "exports_count": len(exports),
         "job_running": job_manager.is_running,
-        "llm_provider": settings.llm_provider,
     }
 
 
@@ -382,13 +381,13 @@ def review_rows(stamp: str) -> dict[str, Any]:
     return data
 
 
-@app.post("/api/review/analyze")
-def review_analyze(body: ReviewAnalyzeRequest) -> dict[str, Any]:
+@app.post("/api/review/export")
+def review_export(body: ReviewExportRequest) -> dict[str, Any]:
     if not body.selections:
         raise HTTPException(400, "Выберите хотя бы одну строку")
     try:
         job = job_manager.start_job(
-            "review_analyze",
+            "review_export",
             stamp=body.stamp,
             selections=[s.model_dump() for s in body.selections],
         )
@@ -416,12 +415,11 @@ def job_start(job_type: str, body: Optional[JobStartRequest] = None) -> dict[str
     allowed = {
         "ingest",
         "classify",
-        "analyze",
         "export",
         "export_flow",
         "full",
         "cleanup",
-        "review_analyze",
+        "review_export",
     }
     if job_type not in allowed:
         raise HTTPException(400, f"Неизвестный тип: {job_type}")

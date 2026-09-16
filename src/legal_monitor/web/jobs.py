@@ -9,7 +9,6 @@ from enum import Enum
 from typing import Any, Callable
 
 from legal_monitor.config import Settings, load_settings
-from legal_monitor.pipeline.analyze import run_analyze
 from legal_monitor.pipeline.classify import run_classify
 from legal_monitor.pipeline.export import run_cleanup, run_export, run_export_flow, run_export_selected
 from legal_monitor.pipeline.ingest import run_ingest
@@ -178,11 +177,6 @@ class JobManager:
                 stats = run_classify(settings, progress=progress)
             return stats
 
-        if job_type == "analyze":
-            with create_progress() as progress:
-                stats = run_analyze(settings, progress=progress)
-            return stats
-
         if job_type == "export":
             paths = run_export(settings, with_analysis=with_analysis)
             return {
@@ -192,57 +186,31 @@ class JobManager:
             }
 
         if job_type == "export_flow":
-            result = run_export_flow(
-                settings,
-                progress=None,
-                ask_analyze=False,
-                run_analysis=with_analysis,
-            )
-            out: dict[str, Any] = {
+            with create_progress() as progress:
+                result = run_export_flow(settings, progress=progress)
+            return {
                 "list_excel": str(result.list_export.excel),
                 "list_word": str(result.list_export.word),
             }
-            if result.analysis_export:
-                out["analysis_excel"] = str(result.analysis_export.excel)
-                out["analysis_word"] = str(result.analysis_export.word)
-            return out
 
         if job_type == "full":
             with create_progress() as progress:
                 ingest_stats = run_ingest(settings, progress=progress)
                 run_classify(settings, progress=progress)
-            if with_analysis:
-                with create_progress() as progress:
-                    flow = run_export_flow(
-                        settings,
-                        progress=progress,
-                        ask_analyze=False,
-                        run_analysis=True,
-                    )
-            else:
-                flow = run_export_flow(
-                    settings,
-                    progress=None,
-                    ask_analyze=False,
-                    run_analysis=False,
-                )
+                flow = run_export_flow(settings, progress=progress)
             return {"ingest": ingest_stats, "export": self._flow_paths(flow)}
 
         if job_type == "cleanup":
             return run_cleanup(settings)
 
-        if job_type == "review_analyze":
+        if job_type == "review_export":
             selections = kwargs.get("selections") or []
             stamp = kwargs.get("stamp")
             with create_progress() as progress:
-                analyze_stats = run_analyze(
-                    settings, progress=progress, selections=selections
-                )
                 export_paths = run_export_selected(
                     settings, selections, stamp=stamp, progress=progress
                 )
             return {
-                "analyze": analyze_stats,
                 "word": str(export_paths.word),
                 "rows": export_paths.rows,
                 "stamp": export_paths.stamp,
@@ -252,14 +220,10 @@ class JobManager:
 
     @staticmethod
     def _flow_paths(flow) -> dict[str, str]:
-        out = {
+        return {
             "list_excel": str(flow.list_export.excel),
             "list_word": str(flow.list_export.word),
         }
-        if flow.analysis_export:
-            out["analysis_excel"] = str(flow.analysis_export.excel)
-            out["analysis_word"] = str(flow.analysis_export.word)
-        return out
 
     @property
     def is_running(self) -> bool:

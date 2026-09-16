@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -22,10 +21,9 @@ from legal_monitor.monitoring import (
     get_monitoring_window,
     query_monitoring_matches,
 )
-from legal_monitor.pipeline.analyze import run_analyze
 from legal_monitor.pipeline.output_dirs import output_dirs
 from legal_monitor.pipeline.review import rows_to_review_payload, save_review_bundle
-from legal_monitor.progress import create_progress, pause_for_input, resume_after_input, start_step
+from legal_monitor.progress import start_step
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +62,6 @@ class ExportPaths:
 @dataclass
 class ExportFlowResult:
     list_export: ExportPaths
-    analysis_export: ExportPaths | None = None
 
 
 def new_export_stamp() -> str:
@@ -148,76 +145,22 @@ def _count_shortlist_documents(session, settings: Settings) -> int:
     return len({doc.id for _, doc in matches})
 
 
-def _ask_llm_analyze(settings: Settings, progress: Progress | None) -> bool:
-    Session = init_db(str(settings.db_path))
-    session = Session()
-    try:
-        doc_count = _count_shortlist_documents(session, settings)
-    finally:
-        session.close()
-
-    est_min = max(doc_count // 2, 1)
-    pause_for_input(progress)
-    try:
-        sys.stdout.write("\n\n")
-        sys.stdout.write("=" * 50 + "\n")
-        sys.stdout.write("  ВОПРОС О LLM-АНАЛИЗЕ (это не пункт меню!)\n")
-        sys.stdout.write("=" * 50 + "\n")
-        sys.stdout.write(f"В shortlist {doc_count} документов для LLM-анализа\n")
-        sys.stdout.write(f"(оценка времени: от ~{est_min} мин, зависит от Ollama).\n")
-        sys.stdout.write("д — запустить анализ,  н — пропустить (можно также y/n)\n")
-        sys.stdout.flush()
-        answer = input("Провести LLM-анализ? [д/н]: ").strip().lower()
-    finally:
-        resume_after_input(progress)
-
-    if answer in ("д", "y", "yes", "да", "d"):
-        return True
-    if answer in ("н", "n", "no", "нет"):
-        print("LLM-анализ пропущен — сохранён только список.\n")
-        return False
-    print("Не понял ответ — LLM-анализ пропущен (нужно «д» или «н»).\n")
-    return False
-
-
-def _run_analysis_export_phase(
-    settings: Settings,
-    stamp: str,
-    progress: Progress | None,
-) -> ExportPaths:
-    run_analyze(settings, progress=progress)
-    return run_export(settings, with_analysis=True, stamp=stamp, progress=progress)
-
-
 def run_export_flow(
     settings: Settings,
     progress: Progress | None = None,
-    *,
-    ask_analyze: bool = True,
-    run_analysis: bool | None = None,
 ) -> ExportFlowResult:
-    """Выгрузка №1 (список) → опционально LLM → выгрузка №2 (_анализ)."""
+    """Выгрузка shortlist (список за период мониторинга) в Excel/Word.
+
+    Раньше здесь была вторая, опциональная фаза: спросить пользователя,
+    запустить ли LLM-анализ (в интерактивном режиме — вопросом «д/н» в
+    консоли), и если да — прогнать run_analyze() и сохранить вторую
+    выгрузку «_анализ». LLM-анализ убран из проекта целиком (пользователь
+    отказался от LLM), так что эта фаза убрана вместе с ним — выгрузка
+    всегда единственная, без вопроса и без второго файла.
+    """
     stamp = new_export_stamp()
     list_export = run_export(settings, with_analysis=False, stamp=stamp, progress=progress)
-
-    do_analyze = run_analysis
-    if do_analyze is None and ask_analyze:
-        sys.stdout.write("\n")
-        sys.stdout.write("Список выгружен. Сейчас будет вопрос об LLM-анализе.\n")
-        sys.stdout.flush()
-        do_analyze = _ask_llm_analyze(settings, progress)
-
-    analysis_export = None
-    if do_analyze:
-        print("Идёт LLM-анализ… (на экране — только текущий этап)\n")
-        logger.info("LLM-анализ shortlist (только опубликовано за %s дней)", settings.fetch_window_days)
-        if progress is not None:
-            analysis_export = _run_analysis_export_phase(settings, stamp, progress)
-        else:
-            with create_progress() as analyze_progress:
-                analysis_export = _run_analysis_export_phase(settings, stamp, analyze_progress)
-
-    return ExportFlowResult(list_export=list_export, analysis_export=analysis_export)
+    return ExportFlowResult(list_export=list_export)
 
 
 def regenerate_review_bundle(settings: Settings, stamp: str) -> tuple[Path, Path] | None:
@@ -465,7 +408,7 @@ def run_export_selected(
     stamp: str | None = None,
     progress: Progress | None = None,
 ) -> ExportPaths:
-    """Word-выгрузка только отобранных строк (после LLM-анализа)."""
+    """Word-выгрузка только отобранных (вручную, на странице «Отбор») строк."""
     if not selections:
         raise ValueError("Не выбрано ни одной строки")
 
@@ -528,7 +471,7 @@ def _export_word_selected(
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     meta = (
         f"Опубликовано: {date_from.strftime('%d.%m.%Y')} — {date_to.strftime('%d.%m.%Y')}"
-        f" · с LLM-анализом · выгрузка {stamp}"
+        f" · выгрузка {stamp}"
     )
     if review_stamp:
         meta += f" · сессия отбора {review_stamp}"

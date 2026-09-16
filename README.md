@@ -1,6 +1,6 @@
 # Юридический мониторинг
 
-Система ежедневного мониторинга законодательства: скачивает все акты за **последние 14 дней**, пропускает дубликаты, классифицирует по **настраиваемым зонам интереса**, готовит **пояснительные записки** и выгружает в **Excel**.
+Система ежедневного мониторинга законодательства: скачивает все акты за **последние 14 дней**, пропускает дубликаты, классифицирует по **настраиваемым зонам интереса** и выгружает в **Excel и Word**.
 
 ## Быстрый старт в PyCharm
 
@@ -102,8 +102,7 @@ python -m legal_monitor full
 3. **Дубликаты** (тот же `source + external_id`) не сохраняются повторно.
 4. Если текст изменился — запись **обновляется**.
 5. Классификация по ключевым словам из профилей.
-6. Для релевантных — пояснительная записка (правила или LLM).
-7. **Cleanup** (пункт 6 меню): удаляет документы старше 60 дней пакетом 14 дней.
+6. **Cleanup** (пункт 6 меню): удаляет документы старше 60 дней пакетом 14 дней.
 
 ---
 
@@ -118,7 +117,7 @@ legal-monitor/
 │   └── menu.py            # Главное меню для PyCharm
 ├── src/legal_monitor/
 │   ├── connectors/        # pravo, duma, regulation, sozd
-│   ├── pipeline/          # ingest, classify, analyze, export
+│   ├── pipeline/          # ingest, classify, export
 │   └── cli.py             # CLI команды
 ├── data/                  # SQLite база + скачанные файлы
 ├── output/                # Excel отчёты
@@ -132,20 +131,11 @@ legal-monitor/
 ```bash
 python -m legal_monitor ingest     # Скачать
 python -m legal_monitor classify   # Классифицировать
-python -m legal_monitor analyze    # Пояснительные записки
-python -m legal_monitor export     # Excel
+python -m legal_monitor export     # Excel/Word
 python -m legal_monitor cleanup    # Очистка старых
 python -m legal_monitor full       # Всё сразу
 python -m legal_monitor profiles   # Список профилей
 ```
-
----
-
-## Без OpenAI
-
-Проект работает и **без** `OPENAI_API_KEY`. В этом случае:
-- классификация идёт по ключевым словам;
-- memo формируется в упрощённом режиме с рекомендацией проверить первоисточник.
 
 ---
 

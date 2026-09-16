@@ -1,8 +1,12 @@
-"""Covers the detectors that catch weak/contaminated LLM output -
-analysis_text.py's `contains_prompt_artifact` and `is_weak_analysis` are
-exactly what should flag the real failure mode found during the audit (the
-literal "13% до 15%" prompt example leaking into an unrelated document's
-analysis) if it recurs, even after the prompt fix in analyze.py.
+"""Covers the detectors that catch weak/contaminated LLM output. The LLM
+analysis pipeline itself (pipeline/analyze.py, llm.py) was removed from the
+project - the user stopped using any LLM provider - but these detectors and
+`sanitize_key_changes`/`get_export_changes_text` stay: they're what renders
+any memo rows left over from before in exports without surfacing garbage,
+and `contains_prompt_artifact`/`is_weak_analysis` are exactly what should
+flag the real failure mode found during the pre-removal audit (the literal
+"13% до 15%" prompt example leaking into an unrelated document's analysis)
+if similar contamination is ever found in that legacy data.
 """
 from __future__ import annotations
 
@@ -12,7 +16,6 @@ from legal_monitor.analysis_text import (
     contains_prompt_artifact,
     is_stub_analysis,
     is_weak_analysis,
-    resolve_adoption_status,
     sanitize_key_changes,
 )
 
@@ -63,19 +66,6 @@ def test_sanitize_key_changes_falls_back_when_result_becomes_weak():
     )
     assert result.lower().startswith("кратко:")
     assert "не содержит конкретных изменений" not in result.lower()
-
-
-@pytest.mark.parametrize(
-    "doc_stage,llm_status,expected",
-    [
-        ("Опубликован", "проект", "Опубликован"),  # source stage wins
-        ("", "на рассмотрении", "на рассмотрении"),  # falls back to LLM status
-        ("", "не указана", ""),  # LLM says "not specified" -> nothing
-        ("текст", "", ""),  # garbage stage from ingest is treated as empty
-    ],
-)
-def test_resolve_adoption_status_prioritizes_source_stage(doc_stage, llm_status, expected):
-    assert resolve_adoption_status(doc_stage, llm_status) == expected
 
 
 if __name__ == "__main__":

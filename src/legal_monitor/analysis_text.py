@@ -50,7 +50,6 @@ STUB_MARKERS = (
     *PROMPT_ARTIFACT_PHRASES,
 )
 
-_GARBAGE_STAGES = frozenset({"текст", "text", "—", "-", ""})
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+")
 _WORDS = re.compile(r"[a-zа-яё0-9]+", re.IGNORECASE)
 
@@ -80,20 +79,6 @@ def contains_prompt_artifact(text: str, source_text: str = "") -> bool:
 def contains_placeholder_garbage(text: str) -> bool:
     low = (text or "").lower()
     return any(marker.lower() in low for marker in PLACEHOLDER_MARKERS)
-
-
-def is_bad_llm_output(
-    text: str | None,
-    source_text: str = "",
-    title: str = "",
-) -> bool:
-    return (
-        is_stub_analysis(text)
-        or contains_prompt_artifact(text, source_text)
-        or contains_placeholder_garbage(text)
-        or is_title_paraphrase(text or "", title)
-        or is_weak_analysis(text, title, source_text)
-    )
 
 
 def _normalize_compare(text: str) -> str:
@@ -309,53 +294,6 @@ def sanitize_key_changes(
     return result
 
 
-def normalize_stage(stage: str | None) -> str:
-    value = (stage or "").strip()
-    if value.lower() in _GARBAGE_STAGES:
-        return ""
-    return value
-
-
-def resolve_adoption_status(
-    doc_stage: str | None,
-    llm_status: str = "",
-) -> str:
-    """Статус документа: приоритет у данных ingest, LLM — запасной вариант."""
-    stage = normalize_stage(doc_stage)
-    if stage:
-        return stage
-    llm = (llm_status or "").strip()
-    if llm.lower() not in ("", "не указана", "—", "-"):
-        return llm
-    return ""
-
-
-def build_brief_changes_text(
-    key_changes: str,
-    adoption_status: str = "",
-    effective_date: str = "",
-    *,
-    for_export: bool = False,
-) -> str:
-    """Краткая суть изменений для memo / колонки «Результат рассмотрения»."""
-    body = key_changes.strip()
-    if body and not body.lower().startswith("кратко:"):
-        body = f"Кратко:\n{body}"
-
-    parts: list[str] = []
-    if body:
-        parts.append(body)
-
-    if not for_export:
-        status = adoption_status.strip()
-        if status and status.lower() not in ("не указана", "—", "-"):
-            parts.append(f"Статус: {status}")
-        if effective_date.strip() and effective_date.strip().lower() not in ("не указана", "—", "-"):
-            parts.append(f"Вступление в силу: {effective_date.strip()}")
-
-    return "\n\n".join(parts) if parts else "—"
-
-
 def get_export_changes_text(doc: Document, memo: Memo | None, with_analysis: bool) -> str:
     """Текст для колонки «Результат рассмотрения» в Excel/Word."""
     if not with_analysis or not memo:
@@ -393,14 +331,3 @@ def get_export_changes_text(doc: Document, memo: Memo | None, with_analysis: boo
     if is_stub_analysis(text) or contains_prompt_artifact(text, source):
         return "—"
     return text.strip() or "—"
-
-
-def build_legal_analysis(
-    doc: Document,
-    summary: str,
-    key_changes: str,
-    adoption_status: str = "",
-    effective_date: str = "",
-) -> str:
-    """Полный текст для memo (внутренний)."""
-    return build_brief_changes_text(key_changes, adoption_status, effective_date)
