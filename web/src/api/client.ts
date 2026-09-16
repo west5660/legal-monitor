@@ -76,6 +76,7 @@ export interface DocumentItem {
   external_id: string;
   register_date: string | null;
   stage: string | null;
+  profile_id: string;
   profile_name: string;
   relevance_score: number;
   analysis_preview: string;
@@ -158,18 +159,18 @@ export const api = {
     }),
   jobs: () => request<{ items: Job[]; running: boolean }>("/jobs"),
   job: (id: string) => request<Job>(`/jobs/${id}`),
-  startJob: (type: string, withAnalysis = false) =>
+  startJob: (type: string) =>
     request<Job>(`/jobs/${type}`, {
       method: "POST",
-      body: JSON.stringify({ with_analysis: withAnalysis }),
+      body: JSON.stringify({}),
     }),
   ingestHistory: () => request<{ items: Record<string, unknown>[] }>("/ingest/history"),
   reviewSessions: () => request<{ items: ReviewSession[] }>("/review/sessions"),
   reviewRows: (stamp: string) => request<ReviewData>(`/review/${encodeURIComponent(stamp)}/rows`),
-  reviewExport: (stamp: string, selections: { document_id: number; profile_id: string }[]) =>
+  reviewExport: (stamp: string | undefined, selections: { document_id: number; profile_id: string }[]) =>
     request<Job>("/review/export", {
       method: "POST",
-      body: JSON.stringify({ stamp, selections }),
+      body: JSON.stringify({ stamp: stamp ?? null, selections }),
     }),
 };
 

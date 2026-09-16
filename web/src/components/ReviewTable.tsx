@@ -60,6 +60,7 @@ interface ReviewRowItemProps {
   row: ReviewRow;
   isSelected: boolean;
   onToggle: (rowId: string) => void;
+  onOpenDetail?: (documentId: number) => void;
   style: React.CSSProperties;
 }
 
@@ -67,6 +68,7 @@ const ReviewRowItem = memo(function ReviewRowItem({
   row,
   isSelected,
   onToggle,
+  onOpenDetail,
   style,
 }: ReviewRowItemProps) {
   const brief = rowBrief(row);
@@ -77,6 +79,10 @@ const ReviewRowItem = memo(function ReviewRowItem({
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("a, input, button")) return;
         onToggle(row.row_id);
+      }}
+      onDoubleClick={(e) => {
+        if ((e.target as HTMLElement).closest("a, input, button")) return;
+        onOpenDetail?.(row.document_id);
       }}
     >
       <div className="review-cell review-cell--check">
@@ -116,9 +122,10 @@ interface Props {
   selected: Set<string>;
   onToggle: (rowId: string) => void;
   onToggleVisible: (rowIds: string[], select: boolean) => void;
+  onOpenDetail?: (documentId: number) => void;
 }
 
-export default function ReviewTable({ rows, selected, onToggle, onToggleVisible }: Props) {
+export default function ReviewTable({ rows, selected, onToggle, onToggleVisible, onOpenDetail }: Props) {
   const [filters, setFilters] = useState<ReviewColumnFilters>(EMPTY_FILTERS);
   const deferredFilters = useDeferredValue(filters);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -267,6 +274,7 @@ export default function ReviewTable({ rows, selected, onToggle, onToggleVisible 
                 row={row}
                 isSelected={selected.has(row.row_id)}
                 onToggle={onToggle}
+                onOpenDetail={onOpenDetail}
                 style={{
                   position: "absolute",
                   top: index * ROW_HEIGHT,

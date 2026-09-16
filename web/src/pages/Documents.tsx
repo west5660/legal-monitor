@@ -1,8 +1,26 @@
-import { useEffect, useState } from "react";
-import { api, DocumentItem, FileItem } from "../api/client";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { api, DocumentItem, FileItem, ReviewRow } from "../api/client";
 import GlassCard from "../components/GlassCard";
 import FileViewer from "../components/FileViewer";
 import LoadState from "../components/LoadState";
+import ReviewTable from "../components/ReviewTable";
+
+function toReviewRow(d: DocumentItem): ReviewRow {
+  return {
+    row_id: `${d.id}:${d.profile_id}`,
+    document_id: d.id,
+    profile_id: d.profile_id,
+    register_date: d.register_date,
+    source: d.source,
+    title: d.title,
+    stage: d.stage || "",
+    profile_name: d.profile_name,
+    relevance_score: d.relevance_score,
+    analysis_preview: d.analysis_preview,
+    url: d.url ?? undefined,
+  };
+}
 
 export default function DocumentsPage() {
   const [items, setItems] = useState<DocumentItem[]>([]);
@@ -12,6 +30,9 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [viewerFile, setViewerFile] = useState<FileItem | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
+  const [jobMsg, setJobMsg] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -21,6 +42,7 @@ export default function DocumentsPage() {
       .then((r) => {
         setItems(r.items);
         setTotal(r.total);
+        setSelected(new Set());
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -28,13 +50,55 @@ export default function DocumentsPage() {
 
   useEffect(load, [source]);
 
-  const openDetail = async (id: number) => {
+  const rows = useMemo(() => items.map(toReviewRow), [items]);
+
+  const openDetail = useCallback(async (id: number) => {
     const d = await api.document(id);
     setDetail(d);
-  };
+  }, []);
 
   const openAttachment = (att: FileItem) => {
     setViewerFile(att);
+  };
+
+  const toggle = useCallback((rowId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  }, []);
+
+  const toggleVisible = useCallback((rowIds: string[], select: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of rowIds) {
+        if (select) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const runExport = async () => {
+    if (selected.size === 0) return;
+    setExporting(true);
+    setJobMsg(null);
+    const selections = rows
+      .filter((r) => selected.has(r.row_id))
+      .map((r) => ({ document_id: r.document_id, profile_id: r.profile_id }));
+    const estMin = Math.max(Math.ceil(selections.length / 2), 1);
+    try {
+      const job = await api.reviewExport(undefined, selections);
+      setJobMsg(
+        `Задача ${job.id} запущена (~${estMin} мин на ${selections.length} строк). Смотрите «Журнал».`
+      );
+    } catch (e) {
+      setJobMsg(e instanceof Error ? e.message : "Ошибка запуска");
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -42,56 +106,50 @@ export default function DocumentsPage() {
       <h1 className="page-title">Документы</h1>
       <p className="page-subtitle">Shortlist за период мониторинга · {total} записей</p>
 
-      <div style={{ marginBottom: 16, display: "flex", gap: 8 }}>
-        {["", "regulation", "sozd", "pravo"].map((s) => (
+      <GlassCard className="stat-card review-session-bar">
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 0 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            {["", "regulation", "sozd", "pravo"].map((s) => (
+              <button
+                key={s || "all"}
+                type="button"
+                className={`btn ${source === s ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => setSource(s)}
+              >
+                {s || "Все"}
+              </button>
+            ))}
+          </div>
           <button
-            key={s || "all"}
             type="button"
-            className={`btn ${source === s ? "btn-primary" : "btn-ghost"}`}
-            onClick={() => setSource(s)}
+            className="btn btn-primary"
+            disabled={selected.size === 0 || exporting}
+            onClick={runExport}
+            style={{ marginLeft: "auto" }}
           >
-            {s || "Все"}
+            {exporting ? "Запуск…" : `Экспорт выбранного (${selected.size})`}
           </button>
-        ))}
-      </div>
+        </div>
+      </GlassCard>
+
+      {jobMsg && (
+        <p style={{ color: "var(--accent)", marginBottom: 12 }}>
+          {jobMsg} <Link to="/activity">Журнал →</Link>
+        </p>
+      )}
 
       <LoadState loading={loading} error={error} onRetry={load} />
 
       {!loading && !error && (
-      <GlassCard className="table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Дата</th>
-              <th>Источник</th>
-              <th>Профиль</th>
-              <th>Название</th>
-              <th>Анализ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((d) => (
-              <tr
-                key={`${d.id}-${d.profile_name}`}
-                className="file-row"
-                onDoubleClick={() => openDetail(d.id)}
-                title="Двойной клик — карточка документа"
-              >
-                <td>{d.register_date ?? "—"}</td>
-                <td>
-                  <span className="badge badge-blue">{d.source}</span>
-                </td>
-                <td>{d.profile_name}</td>
-                <td style={{ maxWidth: 320 }}>{d.title}</td>
-                <td style={{ maxWidth: 280, fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                  {(d.analysis_preview || "—").slice(0, 120)}
-                  {(d.analysis_preview?.length ?? 0) > 120 ? "…" : ""}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </GlassCard>
+        <GlassCard className="review-table-wrap">
+          <ReviewTable
+            rows={rows}
+            selected={selected}
+            onToggle={toggle}
+            onToggleVisible={toggleVisible}
+            onOpenDetail={openDetail}
+          />
+        </GlassCard>
       )}
 
       {detail && (

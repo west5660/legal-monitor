@@ -47,7 +47,6 @@ export default function DashboardPage() {
   const stats = [
     { label: "Shortlist", value: data.shortlist_documents, sub: `${data.shortlist_matches} совпадений` },
     { label: "Документов в базе", value: data.documents_total },
-    { label: "Memo / анализ", value: data.memos_total },
     { label: "Выгрузок", value: data.exports_count },
   ];
 

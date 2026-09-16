@@ -45,9 +45,9 @@ export default function ExportsPage() {
     <>
       <h1 className="page-title">Выгрузки и файлы</h1>
       <p className="hint-dblclick">
-        Двойной клик — предпросмотр. Отбор строк и LLM — в разделе{" "}
-        <Link to="/review" style={{ color: "var(--accent)" }}>
-          Отбор
+        Двойной клик — предпросмотр. Отбор и экспорт нужных строк — в разделе{" "}
+        <Link to="/documents" style={{ color: "var(--accent)" }}>
+          Документы
         </Link>
       </p>
 

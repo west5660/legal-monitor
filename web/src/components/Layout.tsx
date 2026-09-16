@@ -6,7 +6,6 @@ const links = [
   { to: "/", label: "Обзор", end: true },
   { to: "/documents", label: "Документы" },
   { to: "/exports", label: "Выгрузки" },
-  { to: "/review", label: "Отбор" },
   { to: "/pipeline", label: "Конвейер" },
   { to: "/profiles", label: "Профили" },
   { to: "/activity", label: "Журнал" },

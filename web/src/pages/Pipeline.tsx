@@ -12,10 +12,10 @@ export default function PipelinePage() {
     api.jobs().then((j) => setRunning(j.running));
   }, [activeJobId]);
 
-  const start = async (type: string, withAnalysis = false) => {
+  const start = async (type: string) => {
     setError(null);
     try {
-      const job = await api.startJob(type, withAnalysis);
+      const job = await api.startJob(type);
       setActiveJobId(job.id);
       setRunning(true);
     } catch (e) {
